@@ -1,5 +1,5 @@
 # Downloaded images are ignored; only the README is tracked
-output/*
+output/**
 !output/README.md
 
 # Never commit image files anywhere in the repo
