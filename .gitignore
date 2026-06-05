@@ -1,6 +1,8 @@
 # Downloaded images are ignored; only the README is tracked
 downloads/**
 !downloads/README.md
+output/**
+outputs/**
 
 # Never commit generated HTML galleries
 *.html

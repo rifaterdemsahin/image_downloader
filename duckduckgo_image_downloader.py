@@ -127,6 +127,37 @@ def fetch_image_urls(query: str, num_images: int, debug: bool = False) -> list[s
     return urls[:num_images]
 
 
+def serve_gallery(output_dir: Path):
+    import http.server, socketserver, threading, shutil
+
+    folder = str(output_dir)
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=folder, **kwargs)
+        def do_GET(self):
+            if self.path == '/delete':
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(b'deleted')
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+                shutil.rmtree(folder, ignore_errors=True)
+            else:
+                super().do_GET()
+        def log_message(self, *args): pass
+
+    with socketserver.TCPServer(('', 0), Handler) as httpd:
+        port = httpd.server_address[1]
+        url = f'http://localhost:{port}/gallery.html'
+        webbrowser.open(url)
+        print(f'Gallery: {url}  (Ctrl+C to exit)')
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print()
+
+
 def write_gallery(output_dir: Path, title: str, entries: list) -> Path:
     total = len(entries)
     abs_path = str(output_dir.resolve())
@@ -229,10 +260,19 @@ def write_gallery(output_dir: Path, title: str, entries: list) -> Path:
     }});
 
     const folderPath = "{abs_path}";
-    function deleteFolder() {{
-      const cmd = 'rm -rf "' + folderPath + '"';
-      if (navigator.clipboard) navigator.clipboard.writeText(cmd).catch(() => {{}});
-      prompt('Run in terminal to delete this folder:', cmd);
+    async function deleteFolder() {{
+      if (!confirm('Permanently delete this folder?\\n\\n' + folderPath)) return;
+      const btn = document.getElementById('del-btn');
+      btn.textContent = 'Deleting...';
+      btn.disabled = true;
+      try {{
+        await fetch('/delete');
+        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0d0d0d;color:#f66;font-family:system-ui;text-align:center"><div><p style="font-size:1.5rem;margin-bottom:.5rem">Folder deleted</p><p style="color:#555;font-size:.85rem">' + folderPath + '</p></div></div>';
+      }} catch(e) {{
+        btn.textContent = 'Delete folder';
+        btn.disabled = false;
+        alert('Delete failed. Is the server still running?');
+      }}
     }}
   </script>
 </body>
@@ -294,6 +334,7 @@ def main():
     print(f"\nDone. {downloaded}/{len(urls)} images saved to '{output_dir}/'")
     if entries:
         write_gallery(output_dir, f"DuckDuckGo Images: {args.query}", entries)
+        serve_gallery(output_dir)
 
 
 if __name__ == "__main__":

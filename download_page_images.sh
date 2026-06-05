@@ -41,7 +41,7 @@ print(folder or 'images')
 OUT_DIR="$BASE_DIR/$URL_FOLDER"
 mkdir -p "$OUT_DIR"
 
-GALLERY_PATH="$(python3 - "$PAGE_URL" "$OUT_DIR" <<'PY'
+python3 - "$PAGE_URL" "$OUT_DIR" <<'PY'
 import sys, os, re
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse, unquote
@@ -266,10 +266,19 @@ def write_gallery(out_dir, source_url, entries):
     }});
 
     const folderPath = "{abs_path}";
-    function deleteFolder() {{
-      const cmd = 'rm -rf "' + folderPath + '"';
-      if (navigator.clipboard) navigator.clipboard.writeText(cmd).catch(() => {{}});
-      prompt('Run in terminal to delete this folder:', cmd);
+    async function deleteFolder() {{
+      if (!confirm('Permanently delete this folder?\\n\\n' + folderPath)) return;
+      const btn = document.getElementById('del-btn');
+      btn.textContent = 'Deleting...';
+      btn.disabled = true;
+      try {{
+        await fetch('/delete');
+        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0d0d0d;color:#f66;font-family:system-ui;text-align:center"><div><p style="font-size:1.5rem;margin-bottom:.5rem">Folder deleted</p><p style="color:#555;font-size:.85rem">' + folderPath + '</p></div></div>';
+      }} catch(e) {{
+        btn.textContent = 'Delete folder';
+        btn.disabled = false;
+        alert('Delete failed. Is the server still running?');
+      }}
     }}
   </script>
 </body>
@@ -374,10 +383,36 @@ while queue and pages_scanned < MAX_PAGES:
         if link not in visited_pages:
             queue.append(link)
 
-gallery = write_gallery(out_dir, start_url, downloaded)
-print(gallery)
+write_gallery(out_dir, start_url, downloaded)
 PY
-)"
 
-echo "Gallery: $GALLERY_PATH"
-open "$GALLERY_PATH"
+python3 - "$OUT_DIR" <<'SERVE'
+import sys, http.server, socketserver, threading, shutil, webbrowser
+
+folder = sys.argv[1]
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=folder, **kwargs)
+    def do_GET(self):
+        if self.path == '/delete':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'deleted')
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            shutil.rmtree(folder, ignore_errors=True)
+        else:
+            super().do_GET()
+    def log_message(self, *args): pass
+
+with socketserver.TCPServer(('', 0), Handler) as httpd:
+    port = httpd.server_address[1]
+    url = f'http://localhost:{port}/gallery.html'
+    webbrowser.open(url)
+    print(f'Gallery: {url}  (Ctrl+C to exit)')
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print()
+SERVE
