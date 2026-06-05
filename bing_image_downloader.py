@@ -144,10 +144,11 @@ def write_gallery(output_dir: Path, title: str, entries: list) -> Path:
   <title>Gallery — {title}</title>
   <style>
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ background: #0d0d0d; color: #ccc; font-family: system-ui, sans-serif; font-size: 13px; }}
+    html, body {{ height: 100%; }}
+    body {{ background: #0d0d0d; color: #ccc; font-family: system-ui, sans-serif; font-size: 13px; display: flex; flex-direction: column; overflow: hidden; }}
     header {{
-      position: sticky; top: 0; background: #111; border-bottom: 1px solid #222;
-      padding: 10px 16px; z-index: 10;
+      flex-shrink: 0; background: #111; border-bottom: 1px solid #222;
+      padding: 10px 16px;
       display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
     }}
     .header-title {{ flex: 1; min-width: 0; color: #5af; word-break: break-all; }}
@@ -161,11 +162,11 @@ def write_gallery(output_dir: Path, title: str, entries: list) -> Path:
     .filters button:hover {{ background: #2a2a2a; color: #fff; }}
     .filters button.active {{ background: #1a4a8a; border-color: #5af; color: #fff; }}
     #count {{ color: #555; font-size: 11px; white-space: nowrap; }}
-    .gallery {{ display: flex; flex-direction: column; gap: 6px; padding: 20px; }}
-    .item {{ width: 100%; background: #161616; border: 1px solid #222; border-radius: 4px; overflow: hidden; }}
+    .gallery {{ flex: 1; min-height: 0; overflow-y: scroll; scroll-snap-type: y mandatory; }}
+    .item {{ height: 100%; flex-shrink: 0; scroll-snap-align: start; display: flex; flex-direction: column; border-bottom: 1px solid #1a1a1a; }}
     .item.hidden {{ display: none; }}
-    .item img {{ width: 100%; height: auto; display: block; }}
-    .item p {{ padding: 6px 10px; color: #666; font-size: 11px; }}
+    .item img {{ flex: 1; min-height: 0; width: 100%; object-fit: contain; display: block; background: #0d0d0d; }}
+    .item p {{ flex-shrink: 0; padding: 6px 10px; color: #666; font-size: 11px; background: #111; }}
     .large {{ color: #f90; font-weight: bold; }}
   </style>
 </head>

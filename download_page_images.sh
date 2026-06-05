@@ -111,19 +111,21 @@ def write_gallery(out_dir, source_url, entries):
   <title>Gallery — {source_url}</title>
   <style>
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    html, body {{ height: 100%; }}
     body {{
       background: #0d0d0d;
       color: #ccc;
       font-family: system-ui, sans-serif;
       font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }}
     header {{
-      position: sticky;
-      top: 0;
+      flex-shrink: 0;
       background: #111;
       border-bottom: 1px solid #222;
       padding: 10px 16px;
-      z-index: 10;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -165,28 +167,34 @@ def write_gallery(out_dir, source_url, entries):
       white-space: nowrap;
     }}
     .gallery {{
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      padding: 20px;
+      flex: 1;
+      min-height: 0;
+      overflow-y: scroll;
+      scroll-snap-type: y mandatory;
     }}
     .item {{
-      width: 100%;
-      background: #161616;
-      border: 1px solid #222;
-      border-radius: 4px;
-      overflow: hidden;
+      height: 100%;
+      flex-shrink: 0;
+      scroll-snap-align: start;
+      display: flex;
+      flex-direction: column;
+      border-bottom: 1px solid #1a1a1a;
     }}
     .item.hidden {{ display: none; }}
     .item img {{
+      flex: 1;
+      min-height: 0;
       width: 100%;
-      height: auto;
+      object-fit: contain;
       display: block;
+      background: #0d0d0d;
     }}
     .item p {{
+      flex-shrink: 0;
       padding: 6px 10px;
       color: #666;
       font-size: 11px;
+      background: #111;
     }}
     .large {{ color: #f90; font-weight: bold; }}
   </style>
