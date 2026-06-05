@@ -7,28 +7,25 @@ Usage:
   ./download_page_images.sh <page_url> [output_directory]
 
 Examples:
-  ./download_page_images.sh "https://example.com"
+  ./download_page_images.sh "https://www.bbc.com"
   ./download_page_images.sh "https://example.com/gallery" "images"
 
-Crawls 2 levels deep (main page → linked pages → their linked pages).
-Up to 5 internal links are followed per level.
+BFS-crawls pages (no fixed depth) until more than 10 images over 200 KB
+have been downloaded. Stops at 100 pages as a safety cap.
 EOF
 }
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage
-  exit 0
+  usage; exit 0
 fi
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
-  usage
-  exit 1
+  usage; exit 1
 fi
 
 PAGE_URL="$1"
 BASE_DIR="${2:-output}"
 
-# Derive a safe folder name from the URL: strip scheme, replace non-alphanumeric with _
 URL_FOLDER="$(python3 -c "
 import sys, re
 from urllib.parse import urlparse
@@ -43,168 +40,145 @@ print(folder or 'images')
 OUT_DIR="$BASE_DIR/$URL_FOLDER"
 mkdir -p "$OUT_DIR"
 
-TMP_URLS="$(mktemp)"
-
-cleanup() {
-  rm -f "$TMP_URLS"
-}
-trap cleanup EXIT
-
-echo "Crawling 2 levels deep from: $PAGE_URL"
-
-python3 - "$PAGE_URL" > "$TMP_URLS" <<'PY'
-import sys
-import re
+python3 - "$PAGE_URL" "$OUT_DIR" <<'PY'
+import sys, os, re
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, unquote
 from urllib.request import urlopen, Request
-from urllib.error import URLError
+from collections import deque
 
-MAX_LINKS_PER_LEVEL = 5
-CRAWL_DEPTH = 2
+TARGET    = 10          # stop once this many large images are found
+THRESHOLD = 200 * 1024  # 200 KB
+MAX_PAGES = 100         # safety cap
 
-def fetch(url):
+def fetch_html(url):
     try:
-        req = Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; image-downloader/1.0)"})
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urlopen(req, timeout=10) as r:
             return r.read().decode("utf-8", errors="ignore")
     except Exception as e:
-        print(f"  [skip] {url}: {e}", file=sys.stderr)
+        print(f"  [skip page] {e}", file=sys.stderr)
         return ""
+
+def download_image(url, dest):
+    try:
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=15) as r:
+            data = r.read()
+        with open(dest, "wb") as f:
+            f.write(data)
+        return len(data)
+    except Exception as e:
+        print(f"  [skip img] {e}", file=sys.stderr)
+        if os.path.exists(dest):
+            os.remove(dest)
+        return -1
+
+def safe_name(url, index):
+    name = unquote(os.path.basename(urlparse(url).path)).strip()
+    if not name:
+        name = f"image_{index}.bin"
+    name = re.sub(r"[^A-Za-z0-9._-]", "_", name)
+    return name if name and not name.startswith(".") else f"image_{index}.bin"
+
+def unique_dest(out_dir, name):
+    dest = os.path.join(out_dir, name)
+    if not os.path.exists(dest):
+        return dest
+    base, _, ext = name.rpartition(".")
+    base, ext = (name, "") if not base else (base, "." + ext)
+    n = 1
+    while os.path.exists(os.path.join(out_dir, f"{base}_{n}{ext}")):
+        n += 1
+    return os.path.join(out_dir, f"{base}_{n}{ext}")
 
 class PageParser(HTMLParser):
     def __init__(self, base_url):
         super().__init__()
         self.base_url = base_url
-        self.base_domain = urlparse(base_url).netloc
-        self.images = []
-        self.links = []
+        self.domain   = urlparse(base_url).netloc
+        self.images   = []
+        self.links    = []
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
-        tag = tag.lower()
-
+        tag   = tag.lower()
         if tag == "img":
             for attr in ("src", "data-src", "data-lazy-src"):
-                src = attrs.get(attr)
-                if src:
-                    self._add_image(src)
-            srcset = attrs.get("srcset", "")
-            if srcset:
-                for item in srcset.split(","):
-                    first = item.strip().split()[0] if item.strip() else ""
-                    if first:
-                        self._add_image(first)
-
+                if attrs.get(attr):
+                    self._add_img(attrs[attr])
+            for item in (attrs.get("srcset") or "").split(","):
+                first = item.strip().split()[0] if item.strip() else ""
+                if first:
+                    self._add_img(first)
         elif tag == "a":
             href = attrs.get("href", "")
             if href:
-                absolute = urljoin(self.base_url, href)
-                p = urlparse(absolute)
-                if p.scheme in ("http", "https") and p.netloc == self.base_domain:
-                    clean = p._replace(fragment="").geturl()
-                    self.links.append(clean)
+                abs_url = urljoin(self.base_url, href)
+                p = urlparse(abs_url)
+                if p.scheme in ("http", "https") and p.netloc == self.domain:
+                    self.links.append(p._replace(fragment="").geturl())
 
-    def _add_image(self, raw):
+    def _add_img(self, raw):
         raw = raw.strip()
         if not raw or raw.startswith("data:"):
             return
-        absolute = urljoin(self.base_url, raw)
-        p = urlparse(absolute)
-        if p.scheme in ("http", "https"):
-            self.images.append(absolute)
+        abs_url = urljoin(self.base_url, raw)
+        if urlparse(abs_url).scheme in ("http", "https"):
+            self.images.append(abs_url)
 
+# ── main ──────────────────────────────────────────────────────────────────────
+start_url, out_dir = sys.argv[1], sys.argv[2]
 
-base_url = sys.argv[1]
+queue         = deque([start_url])
 visited_pages = set()
-image_seen = set()
+seen_images   = set()
+img_index     = 0
+large_count   = 0
+pages_scanned = 0
 
-def crawl(url, depth):
+print(f"Crawling: {start_url}")
+print(f"Goal: >{TARGET} images over {THRESHOLD//1024} KB  |  page cap: {MAX_PAGES}\n")
+
+while queue and pages_scanned < MAX_PAGES:
+    url = queue.popleft()
     if url in visited_pages:
-        return []
+        continue
     visited_pages.add(url)
-    indent = "  " * (CRAWL_DEPTH - depth)
-    print(f"{indent}[depth {CRAWL_DEPTH - depth}] Scanning: {url}", file=sys.stderr)
+    pages_scanned += 1
+    print(f"[page {pages_scanned}/{MAX_PAGES}] {url}")
 
-    html = fetch(url)
+    html = fetch_html(url)
     if not html:
-        return []
+        continue
 
     parser = PageParser(url)
     parser.feed(html)
 
-    images = parser.images
-    if depth > 0:
-        for link in parser.links[:MAX_LINKS_PER_LEVEL]:
-            images += crawl(link, depth - 1)
-    return images
+    for img_url in parser.images:
+        if img_url in seen_images:
+            continue
+        seen_images.add(img_url)
+        img_index += 1
 
-for img in crawl(base_url, depth=CRAWL_DEPTH):
-    if img not in image_seen:
-        image_seen.add(img)
-        print(img)
+        dest = unique_dest(out_dir, safe_name(img_url, img_index))
+        size = download_image(img_url, dest)
+        if size < 0:
+            continue
+
+        kb = size // 1024
+        if size > THRESHOLD:
+            large_count += 1
+            print(f"  [{img_index}] {os.path.basename(dest)}  {kb} KB  *** large #{large_count}/{TARGET}")
+            if large_count > TARGET:
+                print(f"\nGoal reached: {large_count} images over {THRESHOLD//1024} KB. Done.")
+                sys.exit(0)
+        else:
+            print(f"  [{img_index}] {os.path.basename(dest)}  {kb} KB")
+
+    for link in parser.links:
+        if link not in visited_pages:
+            queue.append(link)
+
+print(f"\nScanned {pages_scanned} pages. Found {large_count} large image(s) — goal not fully reached.")
 PY
-
-TOTAL="$(wc -l < "$TMP_URLS" | tr -d '[:space:]')"
-
-if [[ "$TOTAL" == "0" ]]; then
-  echo "No images found on page."
-  exit 0
-fi
-
-echo "Found $TOTAL image URL(s). Downloading to: $OUT_DIR"
-
-index=0
-while IFS= read -r IMG_URL; do
-  [[ -z "$IMG_URL" ]] && continue
-  index=$((index + 1))
-
-  FILE_NAME="$(python3 - "$IMG_URL" "$index" <<'PY'
-import sys
-from urllib.parse import urlparse, unquote
-import os
-import re
-
-url = sys.argv[1]
-index = int(sys.argv[2])
-
-path = urlparse(url).path
-name = os.path.basename(path)
-name = unquote(name).strip()
-
-if not name:
-    name = f"image_{index}.jpg"
-
-name = re.sub(r"[^A-Za-z0-9._-]", "_", name)
-if not name or name.startswith("."):
-    name = f"image_{index}.jpg"
-
-print(name)
-PY
-)"
-
-  DEST="$OUT_DIR/$FILE_NAME"
-  if [[ -e "$DEST" ]]; then
-    base="${FILE_NAME%.*}"
-    ext="${FILE_NAME##*.}"
-    if [[ "$base" == "$ext" ]]; then
-      ext=""
-    else
-      ext=".$ext"
-    fi
-    n=1
-    while [[ -e "$OUT_DIR/${base}_$n$ext" ]]; do
-      n=$((n + 1))
-    done
-    DEST="$OUT_DIR/${base}_$n$ext"
-  fi
-
-  if curl -fsSL "$IMG_URL" -o "$DEST"; then
-    echo "[$index/$TOTAL] Downloaded: $DEST"
-  else
-    rm -f "$DEST"
-    echo "[$index/$TOTAL] Failed: $IMG_URL" >&2
-  fi
-done < "$TMP_URLS"
-
-echo "Done."
