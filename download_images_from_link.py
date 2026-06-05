@@ -139,10 +139,13 @@ def write_gallery(output_dir: Path, title: str, entries: list) -> Path:
 def main():
     parser = argparse.ArgumentParser(description="Download all images from a given URL.")
     parser.add_argument("url", help="The URL to scrape images from")
-    parser.add_argument("--output", "-o", default="./downloaded_images", help="Output directory")
+    parser.add_argument("--output", "-o", default="output", help="Base output directory (default: output)")
     args = parser.parse_args()
 
-    output_dir = Path(args.output)
+    from urllib.parse import urlparse as _urlparse
+    _p = _urlparse(args.url)
+    _folder = re.sub(r"[^A-Za-z0-9._-]", "_", (_p.netloc + _p.path).strip("/")) or "images"
+    output_dir = Path(args.output) / _folder
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Fetching link: {args.url}")

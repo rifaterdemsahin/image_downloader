@@ -221,12 +221,13 @@ def main():
     parser = argparse.ArgumentParser(description="Download images from DuckDuckGo Images")
     parser.add_argument("--query", "-q", required=True, help="Search query")
     parser.add_argument("--num", "-n", type=int, default=10, help="Number of images (default: 10)")
-    parser.add_argument("--output", "-o", default="./images", help="Output directory (default: ./images)")
+    parser.add_argument("--output", "-o", default="output", help="Base output directory (default: output)")
     parser.add_argument("--delay", "-d", type=float, default=0.5, help="Delay between downloads (default: 0.5s)")
     parser.add_argument("--debug", action="store_true", help="Print debug info")
     args = parser.parse_args()
 
-    output_dir = Path(args.output)
+    safe_query = re.sub(r"[^\w]", "_", args.query).strip("_")
+    output_dir = Path(args.output) / f"ddg_{safe_query}"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Searching DuckDuckGo Images for: '{args.query}'")
@@ -254,7 +255,6 @@ def main():
                 ext = ".jpg" if candidate == ".jpeg" else candidate
                 break
 
-        safe_query = re.sub(r"[^\w]", "_", args.query)
         filename = output_dir / f"{safe_query}_{i:03d}{ext}"
         print(f"[{i}/{len(urls)}] {url[:90]}...")
         if download_image(url, str(filename)):
