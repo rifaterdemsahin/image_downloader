@@ -279,8 +279,6 @@ def write_gallery(output_dir: Path, title: str, entries: list) -> Path:
 </html>"""
     path = output_dir / "gallery.html"
     path.write_text(html, encoding="utf-8")
-    webbrowser.open(path.resolve().as_uri())
-    print(f"Gallery → {path}")
     return path
 
 
