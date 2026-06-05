@@ -25,7 +25,7 @@ if [[ $# -lt 1 || $# -gt 2 ]]; then
 fi
 
 PAGE_URL="$1"
-BASE_DIR="${2:-output}"
+BASE_DIR="${2:-downloads}"
 
 URL_FOLDER="$(python3 -c "
 import sys, re

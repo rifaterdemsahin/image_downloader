@@ -221,7 +221,7 @@ def main():
     parser = argparse.ArgumentParser(description="Download images from DuckDuckGo Images")
     parser.add_argument("--query", "-q", required=True, help="Search query")
     parser.add_argument("--num", "-n", type=int, default=10, help="Number of images (default: 10)")
-    parser.add_argument("--output", "-o", default="output", help="Base output directory (default: output)")
+    parser.add_argument("--output", "-o", default="downloads", help="Base output directory (default: downloads)")
     parser.add_argument("--delay", "-d", type=float, default=0.5, help="Delay between downloads (default: 0.5s)")
     parser.add_argument("--debug", action="store_true", help="Print debug info")
     args = parser.parse_args()
