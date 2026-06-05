@@ -167,13 +167,11 @@ def write_gallery(out_dir, source_url, entries):
     .gallery {{
       display: flex;
       flex-direction: column;
-      align-items: center;
       gap: 6px;
       padding: 20px;
     }}
     .item {{
       width: 100%;
-      max-width: 1200px;
       background: #161616;
       border: 1px solid #222;
       border-radius: 4px;

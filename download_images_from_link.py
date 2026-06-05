@@ -81,8 +81,8 @@ def write_gallery(output_dir: Path, title: str, entries: list) -> Path:
     .filters button:hover {{ background: #2a2a2a; color: #fff; }}
     .filters button.active {{ background: #1a4a8a; border-color: #5af; color: #fff; }}
     #count {{ color: #555; font-size: 11px; white-space: nowrap; }}
-    .gallery {{ display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 20px; }}
-    .item {{ width: 100%; max-width: 1200px; background: #161616; border: 1px solid #222; border-radius: 4px; overflow: hidden; }}
+    .gallery {{ display: flex; flex-direction: column; gap: 6px; padding: 20px; }}
+    .item {{ width: 100%; background: #161616; border: 1px solid #222; border-radius: 4px; overflow: hidden; }}
     .item.hidden {{ display: none; }}
     .item img {{ width: 100%; height: auto; display: block; }}
     .item p {{ padding: 6px 10px; color: #666; font-size: 11px; }}
