@@ -416,3 +416,8 @@ with socketserver.TCPServer(('', 0), Handler) as httpd:
     except KeyboardInterrupt:
         print()
 SERVE
+
+read -rp $'\nRun cleanup.sh? [y/N] ' _ans
+if [[ "${_ans,,}" == "y" ]]; then
+  "$(dirname "$0")/cleanup.sh"
+fi

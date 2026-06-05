@@ -335,6 +335,10 @@ def main():
     if entries:
         write_gallery(output_dir, f"DuckDuckGo Images: {args.query}", entries)
         serve_gallery(output_dir)
+        ans = input('\nRun cleanup.sh? [y/N] ').strip().lower()
+        if ans == 'y':
+            import subprocess
+            subprocess.run(['bash', str(Path(__file__).parent / 'cleanup.sh')])
 
 
 if __name__ == "__main__":
