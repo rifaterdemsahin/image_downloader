@@ -1,3 +1,21 @@
 # Downloaded images are ignored; only the README is tracked
 output/*
 !output/README.md
+
+# Never commit image files anywhere in the repo
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.avif
+*.bmp
+*.tiff
+*.tif
+*.ico
+*.svg
+*.heic
+*.heif
+*.raw
+*.cr2
+*.nef
