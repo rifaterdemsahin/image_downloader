@@ -4,28 +4,46 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  ./download_page_images.sh <page_url> [output_directory]
+  ./download_page_images.sh [--num N] <page_url> [output_directory]
+
+Options:
+  --num N   Stop after N large images (>200 KB) are downloaded (default: 10)
 
 Examples:
   ./download_page_images.sh "https://www.bbc.com"
+  ./download_page_images.sh --num 20 "https://www.bbc.com"
   ./download_page_images.sh "https://example.com/gallery" "images"
 
-BFS-crawls pages (no fixed depth) until more than 10 images over 200 KB
+BFS-crawls pages (no fixed depth) until more than N images over 200 KB
 have been downloaded. Stops at 100 pages as a safety cap.
 Generates gallery.html in the output folder and opens it in the browser.
 EOF
 }
 
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage; exit 0
-fi
+NUM_TARGET=10
+PAGE_URL=""
+BASE_DIR="downloads"
 
-if [[ $# -lt 1 || $# -gt 2 ]]; then
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --num|-n)
+      [[ $# -lt 2 ]] && { echo "Error: --num requires a value"; usage; exit 1; }
+      NUM_TARGET="$2"; shift 2 ;;
+    -*)
+      echo "Unknown option: $1"; usage; exit 1 ;;
+    *)
+      if [[ -z "$PAGE_URL" ]]; then PAGE_URL="$1"
+      elif [[ "$BASE_DIR" == "downloads" ]]; then BASE_DIR="$1"
+      else echo "Too many arguments"; usage; exit 1
+      fi
+      shift ;;
+  esac
+done
+
+if [[ -z "$PAGE_URL" ]]; then
   usage; exit 1
 fi
-
-PAGE_URL="$1"
-BASE_DIR="${2:-downloads}"
 
 URL_FOLDER="$(python3 -c "
 import sys, re
@@ -41,7 +59,7 @@ print(folder or 'images')
 OUT_DIR="$BASE_DIR/$URL_FOLDER"
 mkdir -p "$OUT_DIR"
 
-python3 - "$PAGE_URL" "$OUT_DIR" <<'PY'
+python3 - "$PAGE_URL" "$OUT_DIR" "$NUM_TARGET" <<'PY'
 import sys, os, re
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse, unquote
@@ -49,7 +67,7 @@ from urllib.request import urlopen, Request
 from collections import deque
 from datetime import datetime
 
-TARGET    = 10          # stop once this many large images are found
+TARGET    = int(sys.argv[3]) if len(sys.argv) > 3 else 10
 THRESHOLD = 200 * 1024  # 200 KB
 MAX_PAGES = 100         # safety cap
 

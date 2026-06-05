@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import re
 import urllib.request
 import urllib.parse
 import webbrowser
@@ -204,6 +205,7 @@ def write_gallery(output_dir: Path, title: str, entries: list) -> Path:
 def main():
     parser = argparse.ArgumentParser(description="Download all images from a given URL.")
     parser.add_argument("url", help="The URL to scrape images from")
+    parser.add_argument("--num", "-n", type=int, default=0, help="Max images to download (default: 0 = all)")
     parser.add_argument("--output", "-o", default="downloads", help="Base output directory (default: downloads)")
     args = parser.parse_args()
 
@@ -242,8 +244,10 @@ def main():
         print("No images found on this page.")
         return
         
+    limit = args.num if args.num > 0 else len(img_urls)
+    img_urls = img_urls[:limit]
     print(f"Found {len(img_urls)} unique image tag(s). Resolving URLs and downloading...")
-    
+
     downloaded = 0
     entries = []
     for i, img_src in enumerate(img_urls, 1):
