@@ -1,0 +1,3 @@
+# Downloaded images are ignored; only the README is tracked
+output/*
+!output/README.md
