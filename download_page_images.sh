@@ -96,10 +96,11 @@ def unique_dest(out_dir, name):
 
 def write_gallery(out_dir, source_url, entries):
     items_html = "\n".join(
-        f'''    <div class="item">
-      <img src="{name}" alt="{name}" loading="lazy">
-      <p>{name} &nbsp;·&nbsp; {kb} KB{" &nbsp;·&nbsp; <span class='large'>★ large</span>" if large else ""}</p>
-    </div>'''
+        f'    <div class="item" data-kb="{kb}">\n'
+        f'      <img src="{name}" alt="{name}" loading="lazy">\n'
+        f'      <p>{name} &nbsp;·&nbsp; {kb} KB'
+        + (' &nbsp;·&nbsp; <span class="large">★ large</span>' if large else '')
+        + '</p>\n    </div>'
         for name, kb, large in entries
     )
     html = f"""<!DOCTYPE html>
@@ -121,11 +122,48 @@ def write_gallery(out_dir, source_url, entries):
       top: 0;
       background: #111;
       border-bottom: 1px solid #222;
-      padding: 10px 20px;
+      padding: 10px 16px;
       z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
     }}
-    header a {{ color: #5af; text-decoration: none; word-break: break-all; }}
-    header span {{ color: #666; margin-left: 12px; }}
+    .header-url {{
+      flex: 1;
+      min-width: 0;
+    }}
+    .header-url a {{ color: #5af; text-decoration: none; word-break: break-all; }}
+    .header-meta {{ color: #555; font-size: 11px; white-space: nowrap; }}
+    .filters {{
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }}
+    .filters button {{
+      background: #1e1e1e;
+      border: 1px solid #333;
+      color: #aaa;
+      padding: 4px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }}
+    .filters button:hover {{
+      background: #2a2a2a;
+      color: #fff;
+    }}
+    .filters button.active {{
+      background: #1a4a8a;
+      border-color: #5af;
+      color: #fff;
+    }}
+    #count {{
+      color: #555;
+      font-size: 11px;
+      white-space: nowrap;
+    }}
     .gallery {{
       display: flex;
       flex-direction: column;
@@ -141,6 +179,7 @@ def write_gallery(out_dir, source_url, entries):
       border-radius: 4px;
       overflow: hidden;
     }}
+    .item.hidden {{ display: none; }}
     .item img {{
       width: 100%;
       height: auto;
@@ -156,12 +195,48 @@ def write_gallery(out_dir, source_url, entries):
 </head>
 <body>
   <header>
-    <a href="{source_url}" target="_blank">{source_url}</a>
-    <span>{len(entries)} images &nbsp;·&nbsp; generated {datetime.now().strftime("%Y-%m-%d %H:%M")}</span>
+    <div class="header-url">
+      <a href="{source_url}" target="_blank">{source_url}</a>
+      <span class="header-meta">&nbsp;·&nbsp; generated {datetime.now().strftime("%Y-%m-%d %H:%M")}</span>
+    </div>
+    <div class="filters">
+      <button class="active" data-min="0">All</button>
+      <button data-min="10">10 KB+</button>
+      <button data-min="100">100 KB+</button>
+      <button data-min="200">200 KB+</button>
+      <button data-min="300">300 KB+</button>
+      <button data-min="500">500 KB+</button>
+    </div>
+    <span id="count"></span>
   </header>
   <div class="gallery">
 {items_html}
   </div>
+  <script>
+    const items = Array.from(document.querySelectorAll('.item'));
+    const countEl = document.getElementById('count');
+
+    function applyFilter(minKb) {{
+      let visible = 0;
+      items.forEach(el => {{
+        const kb = parseInt(el.dataset.kb, 10);
+        const show = kb >= minKb;
+        el.classList.toggle('hidden', !show);
+        if (show) visible++;
+      }});
+      countEl.textContent = visible + ' / {len(entries)} images';
+    }}
+
+    document.querySelectorAll('.filters button').forEach(btn => {{
+      btn.addEventListener('click', () => {{
+        document.querySelectorAll('.filters button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyFilter(parseInt(btn.dataset.min, 10));
+      }});
+    }});
+
+    applyFilter(0);
+  </script>
 </body>
 </html>"""
     path = os.path.join(out_dir, "gallery.html")
