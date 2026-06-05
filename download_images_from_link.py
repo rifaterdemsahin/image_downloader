@@ -48,6 +48,7 @@ def download_image(url, output_dir):
 
 def write_gallery(output_dir: Path, title: str, entries: list) -> Path:
     total = len(entries)
+    abs_path = str(output_dir.resolve())
     items_html = "\n".join(
         f'    <div class="item" data-kb="{kb}">\n'
         f'      <img src="{name}" alt="{name}" loading="lazy">\n'
@@ -85,9 +86,16 @@ def write_gallery(output_dir: Path, title: str, entries: list) -> Path:
     .gallery {{ flex: 1; min-height: 0; overflow-y: scroll; scroll-snap-type: y mandatory; }}
     .item {{ height: 100%; flex-shrink: 0; scroll-snap-align: start; display: flex; flex-direction: column; border-bottom: 1px solid #1a1a1a; }}
     .item.hidden {{ display: none; }}
-    .item img {{ flex: 1; min-height: 0; width: 100%; object-fit: contain; display: block; background: #0d0d0d; }}
+    :root {{ --zoom: 1; }}
+    .item img {{ flex: 1; min-height: 0; width: 100%; object-fit: contain; display: block; background: #0d0d0d; transform: scale(var(--zoom)); transform-origin: center center; transition: transform .15s; }}
     .item p {{ flex-shrink: 0; padding: 6px 10px; color: #666; font-size: 11px; background: #111; }}
     .large {{ color: #f90; font-weight: bold; }}
+    .zoom-ctrl {{ display: flex; align-items: center; gap: 6px; }}
+    .zoom-ctrl label {{ color: #999; font-size: 11px; }}
+    .zoom-ctrl input[type=range] {{ width: 90px; cursor: pointer; accent-color: #5af; }}
+    #zoom-val {{ color: #999; font-size: 11px; min-width: 34px; }}
+    #del-btn {{ background: #1a0505; border: 1px solid #5a1a1a; color: #f66; padding: 4px 12px; border-radius: 20px; cursor: pointer; font-size: 12px; white-space: nowrap; }}
+    #del-btn:hover {{ background: #5a1a1a; color: #fff; }}
   </style>
 </head>
 <body>
@@ -103,6 +111,12 @@ def write_gallery(output_dir: Path, title: str, entries: list) -> Path:
       <button data-min="500">500 KB+</button>
     </div>
     <span id="count"></span>
+    <div class="zoom-ctrl">
+      <label for="zoom">Zoom</label>
+      <input type="range" id="zoom" min="10" max="100" value="100">
+      <span id="zoom-val">100%</span>
+    </div>
+    <button id="del-btn" onclick="deleteFolder()">Delete folder</button>
   </header>
   <div class="gallery">
 {items_html}
@@ -127,6 +141,18 @@ def write_gallery(output_dir: Path, title: str, entries: list) -> Path:
       }});
     }});
     applyFilter(0);
+
+    document.getElementById('zoom').addEventListener('input', function() {{
+      document.documentElement.style.setProperty('--zoom', this.value / 100);
+      document.getElementById('zoom-val').textContent = this.value + '%';
+    }});
+
+    const folderPath = "{abs_path}";
+    function deleteFolder() {{
+      const cmd = 'rm -rf "' + folderPath + '"';
+      if (navigator.clipboard) navigator.clipboard.writeText(cmd).catch(() => {{}});
+      prompt('Run in terminal to delete this folder:', cmd);
+    }}
   </script>
 </body>
 </html>"""
