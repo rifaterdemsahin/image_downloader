@@ -12,6 +12,7 @@ Examples:
 
 BFS-crawls pages (no fixed depth) until more than 10 images over 200 KB
 have been downloaded. Stops at 100 pages as a safety cap.
+Generates gallery.html in the output folder and opens it in the browser.
 EOF
 }
 
@@ -40,12 +41,13 @@ print(folder or 'images')
 OUT_DIR="$BASE_DIR/$URL_FOLDER"
 mkdir -p "$OUT_DIR"
 
-python3 - "$PAGE_URL" "$OUT_DIR" <<'PY'
+GALLERY_PATH="$(python3 - "$PAGE_URL" "$OUT_DIR" <<'PY'
 import sys, os, re
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse, unquote
 from urllib.request import urlopen, Request
 from collections import deque
+from datetime import datetime
 
 TARGET    = 10          # stop once this many large images are found
 THRESHOLD = 200 * 1024  # 200 KB
@@ -92,6 +94,81 @@ def unique_dest(out_dir, name):
         n += 1
     return os.path.join(out_dir, f"{base}_{n}{ext}")
 
+def write_gallery(out_dir, source_url, entries):
+    items_html = "\n".join(
+        f'''    <div class="item">
+      <img src="{name}" alt="{name}" loading="lazy">
+      <p>{name} &nbsp;·&nbsp; {kb} KB{" &nbsp;·&nbsp; <span class='large'>★ large</span>" if large else ""}</p>
+    </div>'''
+        for name, kb, large in entries
+    )
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gallery — {source_url}</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      background: #0d0d0d;
+      color: #ccc;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+    }}
+    header {{
+      position: sticky;
+      top: 0;
+      background: #111;
+      border-bottom: 1px solid #222;
+      padding: 10px 20px;
+      z-index: 10;
+    }}
+    header a {{ color: #5af; text-decoration: none; word-break: break-all; }}
+    header span {{ color: #666; margin-left: 12px; }}
+    .gallery {{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 20px;
+    }}
+    .item {{
+      width: 100%;
+      max-width: 1200px;
+      background: #161616;
+      border: 1px solid #222;
+      border-radius: 4px;
+      overflow: hidden;
+    }}
+    .item img {{
+      width: 100%;
+      height: auto;
+      display: block;
+    }}
+    .item p {{
+      padding: 6px 10px;
+      color: #666;
+      font-size: 11px;
+    }}
+    .large {{ color: #f90; font-weight: bold; }}
+  </style>
+</head>
+<body>
+  <header>
+    <a href="{source_url}" target="_blank">{source_url}</a>
+    <span>{len(entries)} images &nbsp;·&nbsp; generated {datetime.now().strftime("%Y-%m-%d %H:%M")}</span>
+  </header>
+  <div class="gallery">
+{items_html}
+  </div>
+</body>
+</html>"""
+    path = os.path.join(out_dir, "gallery.html")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(html)
+    return path
+
 class PageParser(HTMLParser):
     def __init__(self, base_url):
         super().__init__()
@@ -136,9 +213,10 @@ seen_images   = set()
 img_index     = 0
 large_count   = 0
 pages_scanned = 0
+downloaded    = []   # (filename, kb, is_large)
 
-print(f"Crawling: {start_url}")
-print(f"Goal: >{TARGET} images over {THRESHOLD//1024} KB  |  page cap: {MAX_PAGES}\n")
+print(f"Crawling: {start_url}", file=sys.stderr)
+print(f"Goal: >{TARGET} images over {THRESHOLD//1024} KB  |  page cap: {MAX_PAGES}\n", file=sys.stderr)
 
 while queue and pages_scanned < MAX_PAGES:
     url = queue.popleft()
@@ -146,7 +224,7 @@ while queue and pages_scanned < MAX_PAGES:
         continue
     visited_pages.add(url)
     pages_scanned += 1
-    print(f"[page {pages_scanned}/{MAX_PAGES}] {url}")
+    print(f"[page {pages_scanned}/{MAX_PAGES}] {url}", file=sys.stderr)
 
     html = fetch_html(url)
     if not html:
@@ -166,19 +244,30 @@ while queue and pages_scanned < MAX_PAGES:
         if size < 0:
             continue
 
-        kb = size // 1024
-        if size > THRESHOLD:
+        kb    = size // 1024
+        large = size > THRESHOLD
+        downloaded.append((os.path.basename(dest), kb, large))
+
+        if large:
             large_count += 1
-            print(f"  [{img_index}] {os.path.basename(dest)}  {kb} KB  *** large #{large_count}/{TARGET}")
+            print(f"  [{img_index}] {os.path.basename(dest)}  {kb} KB  *** large #{large_count}/{TARGET}", file=sys.stderr)
             if large_count > TARGET:
-                print(f"\nGoal reached: {large_count} images over {THRESHOLD//1024} KB. Done.")
-                sys.exit(0)
+                print(f"\nGoal reached: {large_count} images over {THRESHOLD//1024} KB.", file=sys.stderr)
+                break
         else:
-            print(f"  [{img_index}] {os.path.basename(dest)}  {kb} KB")
+            print(f"  [{img_index}] {os.path.basename(dest)}  {kb} KB", file=sys.stderr)
+
+    if large_count > TARGET:
+        break
 
     for link in parser.links:
         if link not in visited_pages:
             queue.append(link)
 
-print(f"\nScanned {pages_scanned} pages. Found {large_count} large image(s) — goal not fully reached.")
+gallery = write_gallery(out_dir, start_url, downloaded)
+print(gallery)
 PY
+)"
+
+echo "Gallery: $GALLERY_PATH"
+open "$GALLERY_PATH"

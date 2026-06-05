@@ -2,6 +2,9 @@
 output/**
 !output/README.md
 
+# Never commit generated HTML galleries
+*.html
+
 # Never commit image files anywhere in the repo
 *.jpg
 *.jpeg
